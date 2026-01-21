@@ -1,0 +1,395 @@
+openapi: 3.0.3
+info:
+  title: Social Network API
+  version: 1.0.0
+  description: REST API для социальной сети (лента, друзья, мессенджер, аутентификация)
+
+servers:
+  - url: http://localhost:5000/api
+
+paths:
+  /auth/login:
+    post:
+      summary: Вход пользователя
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Успешный вход
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  user_id: { type: integer }
+        "401":
+          description: Неверные учетные данные
+
+  /auth/registration:
+    post:
+      summary: Регистрация нового пользователя
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [username, password, email]
+              properties:
+                username: { type: string }
+                password: { type: string }
+                email: { type: string }
+                image:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Пользователь зарегистрирован
+        "400":
+          description: Ошибка в данных
+
+  /auth/logout:
+    post:
+      summary: Выход из системы
+      responses:
+        "200":
+          description: Успешный выход
+
+  /feed:
+    get:
+      summary: Получить ленту постов
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Список постов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Post'
+
+  /posts:
+    post:
+      summary: Создать новый пост
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id:
+                  type: integer
+                message:
+                  type: string
+                image:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Пост создан
+        "400":
+          description: Некорректные данные
+
+  /friends:
+    get:
+      summary: Получить список друзей
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Список друзей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+
+    post:
+      summary: Управление дружбой (принять/отклонить)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, action]
+              properties:
+                user_id:
+                  type: integer
+                action:
+                  type: string
+                  enum: ["accept", "reject"]
+      responses:
+        "200":
+          description: Изменение статуса дружбы
+
+  /friends/add:
+    post:
+      summary: Поиск пользователей по имени
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username]
+              properties:
+                username: { type: string }
+      responses:
+        "200":
+          description: Список найденных пользователей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+
+  /profile/{user_id}:
+    get:
+      summary: Получить профиль пользователя
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Профиль пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        "404":
+          description: Пользователь не найден
+
+    post:
+      summary: Изменение фото профиля или действия с друзьями
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: ["delete", "request", "confirm"]
+                image:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Операция выполнена успешно
+
+  /messenger:
+    get:
+      summary: Получить список чатов пользователя
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Список чатов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Group'
+
+    post:
+      summary: Создать новый чат (группу)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                image:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Группа создана
+
+  /messenger/{group_id}/chat:
+    get:
+      summary: Получить последние сообщения в чате
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Сообщения в чате
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Message'
+
+  /messenger/{group_id}/edit:
+    post:
+      summary: Изменить название или изображение группы
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                image:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Группа обновлена
+
+  /messenger/{group_id}/invite:
+    post:
+      summary: Пригласить пользователя в группу
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id: { type: integer }
+      responses:
+        "200":
+          description: Участник добавлен
+
+  /messenger/{group_id}/remove:
+    post:
+      summary: Удалить участника из группы
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id: { type: integer }
+      responses:
+        "200":
+          description: Участник удален
+
+  /messenger/{group_id}/transfer:
+    post:
+      summary: Передать роль администратора
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id: { type: integer }
+      responses:
+        "200":
+          description: Роль передана
+
+  /messenger/{group_id}/quit:
+    post:
+      summary: Выйти из группы
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Пользователь покинул группу
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        username: { type: string }
+        email: { type: string }
+        photo_url: { type: string }
+
+    Post:
+      type: object
+      properties:
+        id: { type: integer }
+        author_id: { type: integer }
+        message: { type: string }
+        image_url: { type: string }
+        created_at: { type: string, format: date-time }
+
+    Group:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        type: { type: string, enum: ["private", "public"] }
+        photo_url: { type: string }
+        role: { type: string }
+
+    Message:
+      type: object
+      properties:
+        id: { type: integer }
+        group_id: { type: integer }
+        sender_id: { type: integer }
+        text: { type: string }
+        timestamp: { type: string, format: date-time }
