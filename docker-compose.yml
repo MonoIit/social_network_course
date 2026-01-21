@@ -1,0 +1,259 @@
+version: "3.9"
+
+services:
+
+  frontend:
+    container_name: frontend
+    build:
+      context: ./FRONTEND/my-react-app
+    ports:
+      - "5173:80"
+    depends_on:
+      gateway:
+        condition: service_started
+
+  # ============================
+  # Databases
+  # ============================
+
+  postgres-auth:
+    image: postgres:16
+    container_name: postgres-auth
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydb
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-auth-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d mydb"]
+      interval: 5s
+      retries: 10
+
+  postgres-user:
+    image: postgres:16
+    container_name: postgres-user
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydb
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres-user-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d mydb"]
+      interval: 5s
+      retries: 10
+
+  postgres-friend:
+    image: postgres:16
+    container_name: postgres-friend
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydb
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres-friend-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d mydb"]
+      interval: 5s
+      retries: 10
+
+  postgres-messenger:
+    image: postgres:16
+    container_name: postgres-messenger
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydb
+    ports:
+      - "5436:5432"
+    volumes:
+      - postgres-messenger-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d mydb"]
+      interval: 5s
+      retries: 10
+
+  postgres-post:
+    image: postgres:16
+    container_name: postgres-post
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydb
+    ports:
+      - "5437:5432"
+    volumes:
+      - postgres-post-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d mydb"]
+      interval: 5s
+      retries: 10
+
+  # ============================
+  # Kafka
+  # ============================
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.2
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_SERVERS: zookeeper:2888:3888
+
+  kafka:
+    image: confluentinc/cp-kafka:7.3.2
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_BROKER_ID: 1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    depends_on:
+      - zookeeper
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "kafka:9092"]
+      interval: 5s
+      retries: 10
+
+  # ============================
+  # Backend services
+  # ============================
+
+  auth-service:
+    container_name: auth-service
+    build:
+      context: ./BACKEND/social_network
+      dockerfile: auth-service/Dockerfile
+    ports:
+      - "8081:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-auth:5432/mydb
+      SPRING_DATASOURCE_USERNAME: myuser
+      SPRING_DATASOURCE_PASSWORD: mypassword
+      JWT_SECRET: MySuperPuperDuperMegaUltraAlphaSecrethtftfgtvgtrtfxdesetytgygyjhcthxrdstsesetrydtfu
+      JWT_TTL: 86400000
+      KAFKA_SERVER: kafka:9092
+      KAFKA_USER_CREATED_TOPIC: user-created
+      KAFKA_USER_DELETED_TOPIC: user-deleted
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  user-service:
+    container_name: user-service
+    build:
+      context: ./BACKEND/social_network
+      dockerfile: user-service/Dockerfile
+    ports:
+      - "8082:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-user:5432/mydb
+      SPRING_DATASOURCE_USERNAME: myuser
+      SPRING_DATASOURCE_PASSWORD: mypassword
+      KAFKA_SERVER: kafka:9092
+      KAFKA_GROUP_ID: user-service
+      KAFKA_USER_CREATED_TOPIC: user-created
+      KAFKA_USER_DELETED_TOPIC: user-deleted
+    depends_on:
+      postgres-user:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  friend-service:
+    container_name: friend-service
+    build:
+      context: ./BACKEND/social_network
+      dockerfile: friend-service/Dockerfile
+    ports:
+      - "8083:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-friend:5432/mydb
+      SPRING_DATASOURCE_USERNAME: myuser
+      SPRING_DATASOURCE_PASSWORD: mypassword
+      KAFKA_SERVER: kafka:9092
+      KAFKA_FRIENDSHIP_CREATED_TOPIC: friendship-created
+      KAFKA_FRIENDSHIP_DELETED_TOPIC: friendship-deleted
+    depends_on:
+      postgres-friend:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  messenger-service:
+    container_name: messenger-service
+    build:
+      context: ./BACKEND/social_network
+      dockerfile: messenger-service/Dockerfile
+    ports:
+      - "8084:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-messenger:5432/mydb
+      SPRING_DATASOURCE_USERNAME: myuser
+      SPRING_DATASOURCE_PASSWORD: mypassword
+      KAFKA_SERVER: kafka:9092
+      KAFKA_GROUP_ID: messenger-service
+      KAFKA_FRIENDSHIP_CREATED_TOPIC: friendship-created
+    depends_on:
+      postgres-messenger:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  post-service:
+    container_name: post-service
+    build:
+      context: ./BACKEND/social_network
+      dockerfile: post-service/Dockerfile
+    ports:
+      - "8085:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-post:5432/mydb
+      SPRING_DATASOURCE_USERNAME: myuser
+      SPRING_DATASOURCE_PASSWORD: mypassword
+    depends_on:
+      postgres-post:
+        condition: service_healthy
+
+  gateway:
+    container_name: gateway
+    build:
+      context: ./BACKEND/social_network
+      dockerfile: gateway/Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      auth-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+      friend-service:
+        condition: service_started
+      messenger-service:
+        condition: service_started
+      post-service:
+        condition: service_started
+
+volumes:
+  postgres-auth-data:
+  postgres-user-data:
+  postgres-friend-data:
+  postgres-messenger-data:
+  postgres-post-data:
