@@ -1,0 +1,8 @@
+rootProject.name = 'social_network_backendi'
+
+include("auth-service")
+include("user-service")
+include("friend-service")
+include("post-service")
+include("messenger-service")
+include("gateway")
